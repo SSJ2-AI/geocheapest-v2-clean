@@ -1,0 +1,85 @@
+# Cloud Build configuration for GeoCheapest v2
+steps:
+  # Build backend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-backend'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/geocheapest/geocheapest-api:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/geocheapest/geocheapest-api:latest'
+      - './backend'
+
+  # Push backend image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-backend'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/geocheapest/geocheapest-api'
+    waitFor: ['build-backend']
+
+  # Deploy backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-backend'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'geocheapest-api'
+      - '--image'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/geocheapest/geocheapest-api:${SHORT_SHA}'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--no-traffic'
+      - '--tag=rc-${SHORT_SHA}'
+    waitFor: ['push-backend']
+
+  # Traffic Splitting (Zero Downtime)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'split-traffic'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'update-traffic'
+      - 'geocheapest-api'
+      - '--to-tags=rc-${SHORT_SHA}=100'
+      - '--region=${_REGION}'
+    waitFor: ['deploy-backend']
+
+  # Build frontend
+  - name: 'node:20'
+    id: 'build-frontend'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cd frontend
+        npm ci
+        npm run build
+    waitFor: ['-']
+
+  # Deploy frontend to Firebase Hosting
+  - name: 'gcr.io/${PROJECT_ID}/firebase'
+    id: 'deploy-frontend'
+    args:
+      - 'deploy'
+      - '--only'
+      - 'hosting'
+      - '--project'
+      - '${PROJECT_ID}'
+    waitFor: ['build-frontend']
+
+substitutions:
+  _REGION: us-central1
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s
