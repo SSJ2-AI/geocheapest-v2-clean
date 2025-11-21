@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from unittest.mock import MagicMock, AsyncMock
 import sys
@@ -27,7 +28,7 @@ def mock_firestore():
     
     return mock_client
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(mock_firestore):
     # Override the dependency
     app.dependency_overrides[get_db] = lambda: mock_firestore

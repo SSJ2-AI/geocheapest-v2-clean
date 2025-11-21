@@ -25,6 +25,7 @@ from pydantic_settings import BaseSettings
 from models import (
     Store, Product, ShopifyListing, AffiliateProduct, Order, OrderItem,
     SellerPayout, CommissionRate, VendorCommissionOverride, ReturnRequest,
+    User, UserCreate, Token, UserPreference,
     CartOptimizationRequest, CartOptimizationResponse, CheckoutRequest,
     PaymentCustomerRequest, VendorSubscriptionRequest, VendorBillingPortalRequest,
     ShippingLabelRequest, ReturnLabelRequest
@@ -128,16 +129,22 @@ _amazon_task: Optional[asyncio.Task] = None
 @app.on_event("startup")
 async def on_startup():
     global _storage_client, _firestore_client, _amazon_task
+    print(f"Initializing GCP clients with project: {settings.GCP_PROJECT_ID}")
+
     try:
-        print(f"Initializing GCP clients with project: {settings.GCP_PROJECT_ID}")
         _storage_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
-        _firestore_client = firestore.AsyncClient(project=settings.GCP_PROJECT_ID or None)
-        print("GCP clients initialized successfully")
-    except Exception as e:
-        print(f"CRITICAL: GCP init failed: {e}")
-        logger.error(f"GCP init failed: {e}")
+        print("Storage client initialized")
+    except Exception as exc:
+        logger.warning(f"Storage init failed: {exc}")
         _storage_client = None
+
+    try:
+        _firestore_client = firestore.AsyncClient(project=settings.GCP_PROJECT_ID or None)
+        print("Firestore client initialized")
+    except Exception as exc:
+        logger.error(f"Firestore init failed: {exc}")
         _firestore_client = None
+
     if affiliate_service.amazon_sync_enabled:
         _amazon_task = asyncio.create_task(
             amazon_sync_loop(affiliate_service)
@@ -165,7 +172,7 @@ async def on_shutdown():
 
 
 def _ensure_gcp():
-    if not _storage_client or not _firestore_client:
+    if not _firestore_client:
         raise HTTPException(status_code=503, detail="GCP not initialized")
     return _storage_client, _firestore_client
 
@@ -794,28 +801,58 @@ async def optimize_cart(
     Optimize cart to find cheapest vendor per item including shipping.
     Compares "Split Order" (cheapest per item) vs "Bundled Order" (all from one vendor).
     """
+    if not request.items:
+        raise HTTPException(status_code=400, detail="Cart is empty")
+
+    shipping_address = request.shipping_address.model_dump()
+
     # 1. Fetch all valid listings for every item
-    cart_listings = {} # {product_id: [listings]}
+    cart_listings: Dict[str, List[Dict[str, Any]]] = {}
     for item in request.items:
         listings = await get_all_listings_with_shipping(
-            db, item.product_id, item.quantity, request.shipping_address
+            db, item.product_id, item.quantity, shipping_address
         )
         if not listings:
             raise HTTPException(status_code=400, detail=f"Product {item.product_id} not available")
         cart_listings[item.product_id] = listings
 
     # 2. Strategy A: Split Order (Greedy - Cheapest per item)
-    split_total = 0
-    split_selection = []
+    optimized_items: List[Dict[str, Any]] = []
+    total_product_price = Decimal("0")
+    total_shipping_cost = Decimal("0")
+
     for item in request.items:
-        # Sort by total_price (price + shipping)
-        sorted_listings = sorted(cart_listings[item.product_id], key=lambda x: x["total_price"])
+        sorted_listings = sorted(
+            cart_listings[item.product_id],
+            key=lambda listing: listing["total_price"]
+        )
         best = sorted_listings[0]
-        split_total += best["total_price"]
-        split_selection.append({
+        best_product_price = Decimal(str(best["product_price"]))
+        best_shipping_cost = Decimal(str(best["shipping_cost"]))
+
+        total_product_price += best_product_price
+        total_shipping_cost += best_shipping_cost
+
+        optimized_items.append({
             "product_id": item.product_id,
             "quantity": item.quantity,
-        "savings": max(0, savings),
+            "source": best["source"],
+            "source_name": best["source_name"],
+            "store_id": best.get("store_id"),
+            "listing_id": best["listing_id"],
+            "product_price": float(best_product_price),
+            "shipping_cost": float(best_shipping_cost),
+            "total_price": float(best_product_price + best_shipping_cost),
+        })
+
+    total_price = total_product_price + total_shipping_cost
+
+    return {
+        "items": optimized_items,
+        "total_product_price": float(total_product_price),
+        "total_shipping_cost": float(total_shipping_cost),
+        "total_price": float(total_price),
+        "savings": 0.0,
         "currency": "CAD"
     }
 
