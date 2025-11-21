@@ -60,7 +60,9 @@ jobs:
             --cpu 1 \
             --timeout 300 \
             --max-instances 10 \
+            --clear-env-vars \
             --set-env-vars="SECRET_KEY=${{ secrets.SECRET_KEY }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }},STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},SHIPPO_API_KEY=${{ secrets.SHIPPO_API_KEY }},FRONTEND_URL=https://geocheapest-v2.web.app,BACKEND_URL=https://geocheapest-api-PLACEHOLDER.run.app"
+
 
       - name: 'Get Cloud Run Service URL'
         run: |
