@@ -72,7 +72,6 @@ class ShopifyService:
     """Handle Shopify API interactions (OAuth, product sync, webhooks)."""
 
     def __init__(self):
-        self.db = firestore.AsyncClient()
         self.search_service = SearchService()
         self.agent_service = AgentService()
         self.api_version = os.getenv("SHOPIFY_API_VERSION", "2024-01")
