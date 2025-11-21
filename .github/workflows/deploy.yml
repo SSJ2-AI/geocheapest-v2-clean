@@ -26,21 +26,30 @@ jobs:
       - name: 'Set up Google Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v2'
 
-      - name: 'Configure Docker for GCR'
+      - name: 'Create Artifact Registry Repository'
         run: |
-          gcloud auth configure-docker
+          gcloud artifacts repositories create geocheapest \
+            --repository-format=docker \
+            --location=us-central1 \
+            --description="Docker repository" \
+            --project=geocheapest-v2 || true
+
+      - name: 'Configure Docker for Artifact Registry'
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev
 
       - name: 'Build and Push Backend Docker Image'
         run: |
           cd backend
-          docker build -t gcr.io/geocheapest-v2/backend:latest .
-          docker push gcr.io/geocheapest-v2/backend:latest
+          docker build -t us-central1-docker.pkg.dev/geocheapest-v2/geocheapest/backend:latest .
+          docker push us-central1-docker.pkg.dev/geocheapest-v2/geocheapest/backend:latest
 
       - name: 'Deploy Backend to Cloud Run'
         run: |
           gcloud run deploy geocheapest-api \
-            --image gcr.io/geocheapest-v2/backend:latest \
+            --image us-central1-docker.pkg.dev/geocheapest-v2/geocheapest/backend:latest \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
-            --project geocheapest-v2
+            --project geocheapest-v2 \
+            --set-env-vars="SECRET_KEY=${{ secrets.SECRET_KEY }}"
