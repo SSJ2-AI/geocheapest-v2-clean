@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
@@ -5,6 +7,8 @@ interface Message {
     sender: 'user' | 'agent';
     text: string;
 }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function ChatWindow() {
     const [isOpen, setIsOpen] = useState(false);
@@ -17,7 +21,7 @@ export default function ChatWindow() {
     useEffect(() => {
         if (isOpen && messages.length === 0) {
             setLoading(true);
-            axios.get('/api/agent/welcome')
+            axios.get(`${API_URL}/api/agent/welcome`)
                 .then(res => {
                     setMessages([{ sender: 'agent', text: res.data.message }]);
                 })
@@ -37,7 +41,7 @@ export default function ChatWindow() {
         setLoading(true);
 
         try {
-            const res = await axios.post('/api/agent/chat', { query: userMsg });
+            const res = await axios.post(`${API_URL}/api/agent/chat`, { query: userMsg });
             setMessages(prev => [...prev, { sender: 'agent', text: res.data.response }]);
         } catch (err) {
             setMessages(prev => [...prev, { sender: 'agent', text: "Sorry, I'm having trouble connecting right now." }]);
