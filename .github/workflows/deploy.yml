@@ -52,4 +52,4 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --project geocheapest-v2 \
-            --set-env-vars="SECRET_KEY=${{ secrets.SECRET_KEY }}"
+            --set-env-vars="SECRET_KEY=${{ secrets.SECRET_KEY }},GCP_PROJECT_ID=geocheapest-v2"

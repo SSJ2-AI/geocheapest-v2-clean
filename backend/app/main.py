@@ -129,9 +129,12 @@ _amazon_task: Optional[asyncio.Task] = None
 async def on_startup():
     global _storage_client, _firestore_client, _amazon_task
     try:
+        print(f"Initializing GCP clients with project: {settings.GCP_PROJECT_ID}")
         _storage_client = storage.Client(project=settings.GCP_PROJECT_ID or None)
         _firestore_client = firestore.AsyncClient(project=settings.GCP_PROJECT_ID or None)
+        print("GCP clients initialized successfully")
     except Exception as e:
+        print(f"CRITICAL: GCP init failed: {e}")
         logger.error(f"GCP init failed: {e}")
         _storage_client = None
         _firestore_client = None
