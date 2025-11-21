@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import axios from 'axios'
 import { Package, DollarSign, TrendingUp, RefreshCw } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-export default function VendorDashboard() {
+function VendorDashboardContent() {
   const searchParams = useSearchParams()
   const shop = searchParams.get('shop')
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -325,5 +325,19 @@ export default function VendorDashboard() {
           </div>
       </div>
     </div>
+  )
+}
+
+export default function VendorDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      }
+    >
+      <VendorDashboardContent />
+    </Suspense>
   )
 }
